@@ -28,9 +28,13 @@ ENV CGO_ENABLED=0
 # платформе, а не в контексте сборки.
 RUN go test ./...
 
-RUN go build -trimpath -ldflags="-s -w" -o /out/auth ./cmd/inspector && \
-    go build -trimpath -ldflags="-s -w" -o /out/auth-http ./cmd/http && \
-    go build -trimpath -ldflags="-s -w" -o /out/auth-probe ./cmd/probe
+# Сборка в бинарь: версия и ревизия видны в журнале старта и в кадре
+# присутствия, а не только в метках образа.
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.revision=${REVISION}" -o /out/auth ./cmd/inspector && \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.revision=${REVISION}" -o /out/auth-http ./cmd/http && \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.revision=${REVISION}" -o /out/auth-probe ./cmd/probe
 
 FROM alpine:3.22
 

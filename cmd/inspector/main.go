@@ -73,6 +73,8 @@ func run() error {
 
 	log := slog.New(slog.NewJSONHandler(logs.Tee(os.Stdout),
 		&slog.HandlerOptions{Level: level}))
+
+	log.Info("build", "version", version, "revision", revision)
 	slog.SetDefault(log)
 
 	profiles, err := config.LoadProfiles(cfg.ProfilesDir, log)
@@ -324,6 +326,7 @@ func startHeartbeat(
 			io["log"] = logIO.Snapshot()
 		}
 		msg := pulse.Build(id, cfg.Name, cfg.Subject, cfg.Queue, work, io)
+		msg.Version, msg.Revision = version, revision
 
 		if snap := profiles.Current(); snap != nil {
 			msg.Rev = int(snap.Gen)

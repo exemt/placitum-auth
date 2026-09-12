@@ -3,7 +3,7 @@ module github.com/exemt/placitum-auth
 go 1.25.0
 
 require (
-	github.com/exemt/placitum-shared v0.3.0
+	github.com/exemt/placitum-shared v0.4.0
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/nats-io/nats.go v1.53.1
 	github.com/redis/go-redis/v9 v9.22.0
