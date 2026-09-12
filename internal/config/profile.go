@@ -594,13 +594,17 @@ func axesOf(verb string) []string {
 	 * матрица держится полной: она сверяется со схемой провода, и ось,
 	 * забытая здесь, читалась бы как расхождение с проводом. У управляющих
 	 * ось -- срок (до конца транзакции либо соединения кадров), у глаголов
-	 * записи -- какая запись (запроса либо ответа).
+	 * записи -- какая запись (запроса либо ответа), у бана -- только адрес:
+	 * другого субъекта у модуля нет.
 	 */
 	case protocol.DoActive, protocol.DoPassive, protocol.DoOff, protocol.DoVote:
 		return []string{protocol.ApplyRequest, protocol.ApplyConn}
 
 	case protocol.DoAudit, protocol.DoArchive:
 		return []string{protocol.ApplyRequest, protocol.ApplyResponse}
+
+	case protocol.DoBan:
+		return []string{protocol.ApplyIP}
 
 	default:
 		// challenge, threshold, skip, mutate, mark -- про этот запрос.
