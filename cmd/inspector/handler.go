@@ -23,13 +23,13 @@ import (
 
 	"github.com/exemt/placitum-auth/internal/audit"
 	"github.com/exemt/placitum-auth/internal/config"
-	"github.com/exemt/placitum-auth/internal/dataset"
 	"github.com/exemt/placitum-auth/internal/decide"
 	"github.com/exemt/placitum-auth/internal/livelist"
-	"github.com/exemt/placitum-shared/netinfo"
 	"github.com/exemt/placitum-auth/internal/protocol"
 	"github.com/exemt/placitum-auth/internal/queue"
 	"github.com/exemt/placitum-auth/internal/store"
+	"github.com/exemt/placitum-shared/dataset"
+	"github.com/exemt/placitum-shared/netinfo"
 )
 
 const (

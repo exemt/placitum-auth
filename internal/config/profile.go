@@ -18,8 +18,8 @@
 package config
 
 import (
-	"regexp"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 

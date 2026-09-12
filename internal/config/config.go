@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/exemt/placitum-shared/loglevel"
 	"github.com/exemt/placitum-auth/internal/token"
+	"github.com/exemt/placitum-shared/loglevel"
 )
 
 const (

@@ -20,11 +20,11 @@ import (
 	"time"
 
 	"github.com/exemt/placitum-auth/internal/config"
-	"github.com/exemt/placitum-auth/internal/dataset"
 	"github.com/exemt/placitum-auth/internal/livelist"
 	"github.com/exemt/placitum-auth/internal/provider"
 	"github.com/exemt/placitum-auth/internal/roster"
 	"github.com/exemt/placitum-auth/internal/token"
+	"github.com/exemt/placitum-shared/dataset"
 )
 
 const (

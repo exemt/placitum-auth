@@ -1325,7 +1325,6 @@ inspectors/auth/
 ├── internal/roster/   nonce, попытки, отзыв: Redis или память
 ├── internal/provider/ local, code, ldap, ntlm
 ├── internal/otp/      TOTP по RFC 6238: общий у провайдера и пробы
-├── internal/dataset/  публикация в активный список локального слоя
 ├── internal/store/    чтение заголовков из обменника по локатору
 ├── internal/config/   окружение, inspector.conf, источники и профили
 ├── web/               страница входа

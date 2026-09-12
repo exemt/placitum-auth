@@ -21,15 +21,15 @@ import (
 
 	"github.com/exemt/placitum-auth/internal/audit"
 	"github.com/exemt/placitum-auth/internal/config"
-	"github.com/exemt/placitum-auth/internal/dataset"
 	"github.com/exemt/placitum-auth/internal/desired"
-	"github.com/exemt/placitum-shared/flow"
 	"github.com/exemt/placitum-auth/internal/livelist"
-	"github.com/exemt/placitum-auth/internal/logsink"
-	"github.com/exemt/placitum-shared/netinfo"
-	"github.com/exemt/placitum-shared/pulse"
 	"github.com/exemt/placitum-auth/internal/queue"
 	"github.com/exemt/placitum-auth/internal/store"
+	"github.com/exemt/placitum-shared/dataset"
+	"github.com/exemt/placitum-shared/flow"
+	"github.com/exemt/placitum-shared/logkit"
+	"github.com/exemt/placitum-shared/netinfo"
+	"github.com/exemt/placitum-shared/pulse"
 )
 
 func main() {
@@ -53,13 +53,13 @@ func run() error {
 	 * остаётся на месте.
 	 */
 	var (
-		logs  *logsink.Sink
+		logs  *logkit.Sink
 		logIO *flow.Counter
 	)
 
 	if config.LogShip() {
 		logIO = flow.New()
-		logs = logsink.New(config.LogWriter(cfg.Name), cfg.Name, logIO)
+		logs = logkit.NewSink(config.LogWriter(cfg.Name), cfg.Name, logIO)
 
 		defer logs.Close()
 	}
@@ -133,13 +133,13 @@ func run() error {
 	 * в несуществующий поток -- тишина, а не ошибка.
 	 */
 	if logs != nil {
-		if err := logsink.Ensure(nc); err != nil {
+		if err := logkit.Ensure(nc); err != nil {
 			log.Warn("log stream", "error", err.Error())
 		}
 
 		logs.Attach(nc)
-		log.Info("log stream", "stream", logsink.Stream,
-			"subject", logsink.Subject(logs.Writer()))
+		log.Info("log stream", "stream", logkit.Stream,
+			"subject", logkit.Subject(logs.Writer()))
 	}
 
 	/*
