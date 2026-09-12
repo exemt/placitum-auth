@@ -1,0 +1,9 @@
+# Контекст сборки. Dockerfile читается отдельно, поэтому deploy/ из контекста
+# можно исключить. Тесты (*_test.go) НЕ исключены: сборка их запускает.
+
+deploy/
+*.md
+docs/
+.github/
+.gitignore
+.gitattributes
