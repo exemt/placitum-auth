@@ -25,6 +25,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/exemt/placitum-auth/internal/overload"
 	"github.com/exemt/placitum-auth/internal/protocol"
 )
 
@@ -123,11 +124,16 @@ const (
 	OnInvalid = "invalid"
 	// OnForbidden -- вошёл, но не в ту дверь: группы допуска нет.
 	OnForbidden = "forbidden"
+	// OnOverload -- инспектор перегружен: порог at -- заполнение очереди в
+	// процентах (internal/overload).
+	OnOverload = overload.On
 )
 
-// askTravels -- на этом событии просьба соседу доедет: фаза не оборвана.
+// askTravels -- на этом событии просьба соседу доедет: фаза не оборвана. У
+// перегрузки исход запроса заранее не известен, и просьбу соседу оператор
+// ставит сам, зная, что на отказе и на сбросе она не уедет.
 func askTravels(on string) bool {
-	return on == OnAuthenticated
+	return on == OnAuthenticated || on == OnOverload
 }
 
 // Повод: то же ограничение, которым модуль отбраковывает действие с провода.
@@ -143,6 +149,9 @@ var eventNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
  */
 type EventRule struct {
 	On string `yaml:"on"`
+	// At -- только у overload: порог заполнения очереди в процентах, не
+	// назван -- край (internal/overload).
+	At *int `yaml:"at"`
 
 	// Просьба соседу -- форма канала действий.
 	To    string `yaml:"to"`
@@ -197,9 +206,18 @@ func validateEventRule(i int, r EventRule) error {
 
 	switch r.On {
 	case OnAuthenticated, OnAnonymous, OnInvalid, OnForbidden:
+		if r.At != nil {
+			return fmt.Errorf("%s: at is only for on: %s", at, OnOverload)
+		}
+
+	case OnOverload:
+		if err := overload.Check(r.At); err != nil {
+			return fmt.Errorf("%s: %w", at, err)
+		}
+
 	default:
-		return fmt.Errorf("%s: on must be authenticated, anonymous, invalid or "+
-			"forbidden, got %q", at, r.On)
+		return fmt.Errorf("%s: on must be authenticated, anonymous, invalid, "+
+			"forbidden or overload, got %q", at, r.On)
 	}
 
 	if (r.Do == "") == (r.List == "") {
@@ -594,17 +612,13 @@ func axesOf(verb string) []string {
 	 * матрица держится полной: она сверяется со схемой провода, и ось,
 	 * забытая здесь, читалась бы как расхождение с проводом. У управляющих
 	 * ось -- срок (до конца транзакции либо соединения кадров), у глаголов
-	 * записи -- какая запись (запроса либо ответа), у бана -- только адрес:
-	 * другого субъекта у модуля нет.
+	 * записи -- какая запись (запроса либо ответа).
 	 */
 	case protocol.DoActive, protocol.DoPassive, protocol.DoOff, protocol.DoVote:
 		return []string{protocol.ApplyRequest, protocol.ApplyConn}
 
 	case protocol.DoAudit, protocol.DoArchive:
 		return []string{protocol.ApplyRequest, protocol.ApplyResponse}
-
-	case protocol.DoBan:
-		return []string{protocol.ApplyIP}
 
 	default:
 		// challenge, threshold, skip, mutate, mark -- про этот запрос.

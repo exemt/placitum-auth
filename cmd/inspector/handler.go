@@ -25,6 +25,7 @@ import (
 	"github.com/exemt/placitum-auth/internal/config"
 	"github.com/exemt/placitum-auth/internal/decide"
 	"github.com/exemt/placitum-auth/internal/livelist"
+	"github.com/exemt/placitum-auth/internal/overload"
 	"github.com/exemt/placitum-auth/internal/protocol"
 	"github.com/exemt/placitum-auth/internal/queue"
 	"github.com/exemt/placitum-auth/internal/store"
@@ -121,14 +122,18 @@ func (h *handler) evaluate(t *queue.Task, budget time.Duration, shed string) {
 		 * waf_exception … inspector pass.
 		 */
 		reply := protocol.ShedReply(t.Req, shed)
-
-		h.log.Warn("shed", "rid", t.Req.RID, "reason", shed, "budget_ms", budget.Milliseconds())
-		h.send(t.Reply, reply, t.Req, audit.Details{
+		det := audit.Details{
 			Engine: map[string]any{
 				"shed":      shed,
 				"budget_ms": float64(budget.Microseconds()) / 1000,
 			},
-		})
+		}
+
+		asks := h.overloadOnShed(t, shed, reply, det)
+
+		h.log.Warn("shed", "rid", t.Req.RID, "reason", shed, "budget_ms", budget.Milliseconds(),
+			"asks", asks)
+		h.send(t.Reply, reply, t.Req, det)
 
 		return
 	}
@@ -136,11 +141,11 @@ func (h *handler) evaluate(t *queue.Task, budget time.Duration, shed string) {
 	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
 
-	reply, det := h.inspect(ctx, t.Req)
+	reply, det := h.inspect(ctx, t.Req, t.Fill)
 	h.send(t.Reply, reply, t.Req, det)
 }
 
-func (h *handler) inspect(ctx context.Context, req *protocol.Request) (
+func (h *handler) inspect(ctx context.Context, req *protocol.Request, fill int) (
 	*protocol.Reply, audit.Details) {
 
 	if req.Phase == protocol.PhaseResponse {
@@ -225,6 +230,14 @@ func (h *handler) inspect(ctx context.Context, req *protocol.Request) (
 		var err error
 
 		fired, err = h.fireEvent(ctx, profile, res, req.Conn.ClientIP)
+
+		// Правила перегрузки: запрос встал в очередь не ниже их порога.
+		if err == nil {
+			var more []protocol.Action
+
+			more, err = h.fireOverload(ctx, profile, fill, false, req.Conn.ClientIP)
+			fired = append(fired, more...)
+		}
 
 		/*
 		 * Правило требует кодер, а кодер молчит: запись в набор не
@@ -454,4 +467,81 @@ func askOf(r config.EventRule) protocol.Action {
 	}
 
 	return out
+}
+
+/*
+ * fireOverload -- правила перегрузки: fill -- заполнение очереди при
+ * постановке запроса, shed -- запрос снят по полной очереди
+ * (internal/overload). Форма та же, что у правил событий: просьбы едут
+ * ответом, записи в набор калитка делает сама. Повод по умолчанию -- код
+ * сброса AUTH_QUEUE_LIMIT.
+ */
+func (h *handler) fireOverload(ctx context.Context, p *config.Profile, fill int, shed bool,
+	clientIP string) ([]protocol.Action, error) {
+
+	var (
+		actions []protocol.Action
+		failed  error
+	)
+
+	for _, r := range p.RulesFor(config.OnOverload) {
+		if !overload.Fires(overload.At(r.At), fill, shed) {
+			continue
+		}
+
+		if r.Do != "" {
+			actions = append(actions, askOf(r))
+
+			continue
+		}
+
+		if clientIP == "" || h.lists == nil {
+			continue
+		}
+
+		reason := r.Code
+
+		if reason == "" {
+			reason = queue.ReasonQueueLimit
+		}
+
+		if err := writeRule(ctx, h.resolver, h.lists, h.log, r, clientIP, reason); err != nil && failed == nil {
+			failed = err
+		}
+	}
+
+	return actions, failed
+}
+
+/*
+ * overloadOnShed -- правила перегрузки на снятом по полной очереди запросе:
+ * срабатывают все, каков бы ни был порог, и только на фазе запроса. Просьбы
+ * едут рядом с error, модуль исполнит свои глаголы; записи калитка делает
+ * сама. Бюджета у снятого запроса нет: кодер ограничен своим таймаутом.
+ */
+func (h *handler) overloadOnShed(t *queue.Task, shed string, reply *protocol.Reply,
+	det audit.Details) int {
+
+	if shed != queue.ReasonQueueLimit || t.Req.Phase != protocol.PhaseRequest {
+		return 0
+	}
+
+	profile, _ := h.profiles.Current().Profile(t.Req.Route.Profile)
+	if profile == nil || profile.Mode == config.ModeOff {
+		return 0
+	}
+
+	actions, err := h.fireOverload(context.Background(), profile, t.Fill, true, t.Req.Conn.ClientIP)
+	if err != nil {
+		h.log.Error("geo unavailable for a list write", "rid", t.Req.RID,
+			"profile", profile.Name, "error", err.Error())
+
+		det.Engine["geo"] = err.Error()
+	}
+
+	if len(actions) != 0 {
+		reply.Actions = actions
+	}
+
+	return len(actions)
 }
