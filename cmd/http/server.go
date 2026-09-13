@@ -461,22 +461,37 @@ func (s *server) bindOf(r *http.Request, src *config.Source) token.Bind {
 }
 
 /*
- * clientIP: форма всегда стоит за nginx, поэтому адрес берётся из заголовка, и
- * только из первого значения. Хвост списка пишет клиент, и доверять ему нельзя;
- * первый элемент проставил тот же nginx, который нас проксирует.
+ * clientIP: форма всегда стоит за nginx, поэтому адрес берётся из заголовка --
+ * из последнего значения. nginx дописывает адрес своего клиента в хвост
+ * ($proxy_add_x_forwarded_for), а всё левее прислал сам клиент: поверь форма
+ * первому значению, подбор пароля считался бы на адрес, который назвал
+ * подбирающий, и сессия привязывалась бы к его выдумке. Балансировщик перед
+ * узлом этого не меняет: узел с realip на адреса балансировщика дописывает уже
+ * адрес настоящего клиента.
  */
 func (s *server) clientIP(r *http.Request) string {
-	if v := r.Header.Get(s.cfg.RealIPHeader); v != "" {
-		first, _, _ := strings.Cut(v, ",")
+	return forwardedAddr(r.Header.Values(s.cfg.RealIPHeader), r.RemoteAddr)
+}
 
-		if ip := strings.TrimSpace(first); ip != "" {
+// forwardedAddr -- последнее значение последней строки заголовка, если это
+// адрес; иначе адрес соединения. Пустой или битый хвост не повод брать значение
+// левее: его писал клиент.
+func forwardedAddr(values []string, remoteAddr string) string {
+	if n := len(values); n > 0 {
+		last := values[n-1]
+
+		if i := strings.LastIndexByte(last, ','); i >= 0 {
+			last = last[i+1:]
+		}
+
+		if ip := strings.TrimSpace(last); net.ParseIP(ip) != nil {
 			return ip
 		}
 	}
 
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	host, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		return remoteAddr
 	}
 
 	return host
