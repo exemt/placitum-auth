@@ -153,21 +153,28 @@ func TestGateWithoutSession(t *testing.T) {
 		uri     string
 		accept  string
 		dest    string
+		uir     bool
 		verdict string
 	}{
-		{"навигация", "GET", "/cart", "text/html", "", protocol.VerdictRedirect},
-		{"HEAD", "HEAD", "/cart", "text/html", "", protocol.VerdictRedirect},
-		{"POST теряет тело", "POST", "/cart", "text/html", "", protocol.VerdictDeny},
-		{"PATCH", "PATCH", "/cart", "text/html", "", protocol.VerdictDeny},
-		{"XHR без html", "GET", "/cart", "application/json", "", protocol.VerdictDeny},
-		{"без Accept", "GET", "/cart", "", "", protocol.VerdictDeny},
-		// Не браузер (curl, fetch из node): Sec-Fetch-Dest нет, решает Accept.
-		{"curl со всем подряд", "GET", "/cart", "*/*", "", protocol.VerdictRedirect},
-		{"переход браузера", "GET", "/cart", "text/html,*/*;q=0.8", "document", protocol.VerdictRedirect},
-		{"фрейм", "GET", "/cart", "text/html,*/*;q=0.8", "iframe", protocol.VerdictRedirect},
+		{"навигация", "GET", "/cart", "text/html", "", false, protocol.VerdictRedirect},
+		{"HEAD", "HEAD", "/cart", "text/html", "", false, protocol.VerdictRedirect},
+		{"POST теряет тело", "POST", "/cart", "text/html", "", false, protocol.VerdictDeny},
+		{"PATCH", "PATCH", "/cart", "text/html", "", false, protocol.VerdictDeny},
+		{"XHR без html", "GET", "/cart", "application/json", "", false, protocol.VerdictDeny},
+		{"без Accept", "GET", "/cart", "", "", false, protocol.VerdictDeny},
+		// Не браузер (curl, fetch из node): страницу просят text/html, «всё подряд» -- нет.
+		{"curl со всем подряд", "GET", "/cart", "*/*", "", false, protocol.VerdictDeny},
+		{"переход браузера", "GET", "/cart", "text/html,*/*;q=0.8", "document", false, protocol.VerdictRedirect},
+		{"фрейм", "GET", "/cart", "text/html,*/*;q=0.8", "iframe", false, protocol.VerdictRedirect},
 		// favicon.ico без сессии: редирект перевыпустил бы билет открытой формы.
-		{"favicon", "GET", "/favicon.ico", "image/avif,image/webp,*/*;q=0.8", "image", protocol.VerdictDeny},
-		{"fetch страницы со всем подряд", "GET", "/api/x", "*/*", "empty", protocol.VerdictDeny},
+		{"favicon", "GET", "/favicon.ico", "image/avif,image/webp,*/*;q=0.8", "image", false, protocol.VerdictDeny},
+		{"fetch страницы со всем подряд", "GET", "/api/x", "*/*", "empty", false, protocol.VerdictDeny},
+		// Обычный HTTP: Sec-Fetch-* браузер не шлёт. Переход узнаётся по
+		// Upgrade-Insecure-Requests, favicon и fetch фронтенда -- подзапросы.
+		{"переход по HTTP", "GET", "/cart", "text/html,application/xhtml+xml,*/*;q=0.8", "", true, protocol.VerdictRedirect},
+		{"переход по HTTP без text/html", "GET", "/cart", "*/*", "", true, protocol.VerdictRedirect},
+		{"favicon по HTTP", "GET", "/favicon.ico", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", "", false, protocol.VerdictDeny},
+		{"fetch фронтенда по HTTP", "GET", "/api/health", "*/*", "", false, protocol.VerdictDeny},
 	}
 
 	for _, c := range cases {
@@ -175,6 +182,7 @@ func TestGateWithoutSession(t *testing.T) {
 			in := input(p, c.method, c.uri)
 			in.Accept = c.accept
 			in.SecFetchDest = c.dest
+			in.UpgradeInsecure = c.uir
 
 			res := Check(in, key, nil)
 
