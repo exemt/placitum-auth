@@ -107,6 +107,10 @@ type Input struct {
 	UserAgent string
 	Accept    string
 
+	// SecFetchMode -- заголовок Sec-Fetch-Mode: navigate у перехода, cors и
+	// no-cors у подзапросов; пусто -- браузер его не прислал.
+	SecFetchMode string
+
 	// Prior -- высказывания предыдущих волн. Значат что-то только там, где в
 	// профиле есть правило trigger.prior; без правила просьба соседа -- запись
 	// в аудите, не больше.
@@ -1027,11 +1031,25 @@ func navigational(in Input, p *config.Profile) bool {
 		return false
 	}
 
-	if p.Gate.HTMLOnly && !acceptsHTML(in.Accept) {
+	if p.Gate.HTMLOnly && !showsPage(in) {
 		return false
 	}
 
 	return true
+}
+
+// showsPage -- покажет ли браузер ответ страницей. Современный браузер говорит
+// это сам: Sec-Fetch-Mode navigate -- переход, остальное -- подзапрос картинки,
+// скрипта или fetch. Accept тут не помощник: favicon.ico просит «image/...,
+// всё подряд», и по «всё подряд» получал бы редирект с новым билетом формы --
+// открытая форма входа устаревала, не дождавшись отправки. Без заголовка (curl,
+// старый браузер) решает Accept.
+func showsPage(in Input) bool {
+	if in.SecFetchMode != "" {
+		return in.SecFetchMode == "navigate"
+	}
+
+	return acceptsHTML(in.Accept)
 }
 
 func acceptsHTML(accept string) bool {

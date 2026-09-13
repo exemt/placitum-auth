@@ -152,20 +152,27 @@ func TestGateWithoutSession(t *testing.T) {
 		method  string
 		uri     string
 		accept  string
+		fetch   string
 		verdict string
 	}{
-		{"навигация", "GET", "/cart", "text/html", protocol.VerdictRedirect},
-		{"HEAD", "HEAD", "/cart", "text/html", protocol.VerdictRedirect},
-		{"POST теряет тело", "POST", "/cart", "text/html", protocol.VerdictDeny},
-		{"PATCH", "PATCH", "/cart", "text/html", protocol.VerdictDeny},
-		{"XHR без html", "GET", "/cart", "application/json", protocol.VerdictDeny},
-		{"без Accept", "GET", "/cart", "", protocol.VerdictDeny},
+		{"навигация", "GET", "/cart", "text/html", "", protocol.VerdictRedirect},
+		{"HEAD", "HEAD", "/cart", "text/html", "", protocol.VerdictRedirect},
+		{"POST теряет тело", "POST", "/cart", "text/html", "", protocol.VerdictDeny},
+		{"PATCH", "PATCH", "/cart", "text/html", "", protocol.VerdictDeny},
+		{"XHR без html", "GET", "/cart", "application/json", "", protocol.VerdictDeny},
+		{"без Accept", "GET", "/cart", "", "", protocol.VerdictDeny},
+		{"curl со всем подряд", "GET", "/cart", "*/*", "", protocol.VerdictRedirect},
+		{"переход браузера", "GET", "/cart", "text/html,*/*;q=0.8", "navigate", protocol.VerdictRedirect},
+		// favicon.ico без сессии: редирект перевыпустил бы билет открытой формы.
+		{"favicon", "GET", "/favicon.ico", "image/avif,image/webp,*/*;q=0.8", "no-cors", protocol.VerdictDeny},
+		{"fetch со всем подряд", "GET", "/api/x", "*/*", "cors", protocol.VerdictDeny},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			in := input(p, c.method, c.uri)
 			in.Accept = c.accept
+			in.SecFetchMode = c.fetch
 
 			res := Check(in, key, nil)
 

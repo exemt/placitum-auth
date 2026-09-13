@@ -85,17 +85,18 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request, src *config.Sour
 	}
 
 	// Билет одноразовый: гасим до провайдеров, иначе один nonce давал бы
-	// сколько угодно попыток подбора.
+	// сколько угодно попыток подбора. Дальше любая неудача показывает форму с
+	// новым билетом (reform): прежний уже погашен.
 	fresh, err := s.roster.Burn(r.Context(), "nonce", ticket.Nonce, src.Ticket.TTL.D())
 	if err != nil {
 		s.log.Error("nonce burn failed", "error", err.Error())
-		s.form(w, r, src, msgUnavailable)
+		s.reform(w, r, src, msgUnavailable)
 
 		return
 	}
 
 	if !fresh {
-		s.form(w, r, src, msgStaleForm)
+		s.reform(w, r, src, msgStaleForm)
 
 		return
 	}
@@ -114,7 +115,7 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request, src *config.Sour
 	 */
 	prior, err := s.priorIdentity(r, src)
 	if err != nil {
-		s.form(w, r, src, msgFirstGate)
+		s.reform(w, r, src, msgFirstGate)
 
 		return
 	}
@@ -210,7 +211,7 @@ func (s *server) rejected(w http.ResponseWriter, r *http.Request, src *config.So
 		s.log.Error("provider unavailable",
 			"source", src.Name, "login", creds.Login, "error", cause.Error())
 
-		s.form(w, r, src, msg)
+		s.reform(w, r, src, msg)
 
 		return
 
@@ -226,7 +227,7 @@ func (s *server) rejected(w http.ResponseWriter, r *http.Request, src *config.So
 	)
 
 	s.count(r.Context(), src, scopes)
-	s.form(w, r, src, msg)
+	s.reform(w, r, src, msg)
 }
 
 func (s *server) count(ctx context.Context, src *config.Source, scopes []string) {

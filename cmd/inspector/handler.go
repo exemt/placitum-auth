@@ -195,6 +195,7 @@ func (h *handler) inspect(ctx context.Context, req *protocol.Request, fill int) 
 		in.Cookie = store.Cookie(pairs, profile.Src.SessionCookie())
 		in.UserAgent = store.Value(pairs, "user-agent")
 		in.Accept = store.Value(pairs, "accept")
+		in.SecFetchMode = store.Value(pairs, "sec-fetch-mode")
 	}
 
 	res := decide.Check(in, h.cfg.Key, h.sessions)

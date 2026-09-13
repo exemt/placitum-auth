@@ -191,16 +191,39 @@ func route(snap *config.Snapshot, uri string) (*config.Source, string) {
  * одноразовость от этого не страдает, а адрес возврата берётся из ?rd=.
  */
 func (s *server) form(w http.ResponseWriter, r *http.Request, src *config.Source, msg string) {
+	s.page(w, r, src, msg, false)
+}
+
+/*
+ * reform -- та же страница после попытки, которая погасила nonce: неверный
+ * пароль, недоступный провайдер, повтор уже отправленной формы. Прежний билет
+ * больше не годен, и без нового следующая попытка упёрлась бы в «форма
+ * устарела» -- второй попытки у человека не было бы вовсе.
+ */
+func (s *server) reform(w http.ResponseWriter, r *http.Request, src *config.Source, msg string) {
+	s.page(w, r, src, msg, true)
+}
+
+func (s *server) page(w http.ResponseWriter, r *http.Request, src *config.Source, msg string,
+	rotate bool) {
+
 	ticket, _ := s.cfg.Key.OpenTicket(cookieValue(r, src.Ticket.Cookie), time.Now())
+	if ticket != nil && ticket.Scope != src.Name {
+		ticket = nil
+	}
 
 	/*
 	 * Возврат -- из ?rd= у прямого захода на форму. Форма, отданная на месте
 	 * (gate.inline), приходит сюда внутренним запросом инспектора с его же
-	 * билетом кукой: возврат уже лежит в билете, и ?rd= там нет.
+	 * билетом кукой: возврат уже лежит в билете, и ?rd= там нет. Отправка формы
+	 * ?rd= не несёт, и новый билет берёт возврат у прежнего.
 	 */
 	back := localPath(r.URL.Query().Get("rd"))
+	if back == "" && ticket != nil {
+		back = ticket.Return
+	}
 
-	if ticket == nil || ticket.Scope != src.Name || (back != "" && ticket.Return != back) {
+	if rotate || ticket == nil || ticket.Return != back {
 		fresh := &token.Ticket{
 			Nonce:  token.NewID(),
 			Return: back,
