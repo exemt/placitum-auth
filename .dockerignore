@@ -1,0 +1,5 @@
+deploy/
+*.md
+.github/
+.gitignore
+.gitattributes

@@ -1,0 +1,6 @@
+/auth
+/auth-http
+/auth-probe
+/data/
+.env
+*.hmac
