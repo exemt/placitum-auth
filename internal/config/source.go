@@ -68,6 +68,7 @@ type Session struct {
 	Cookie     string   `yaml:"cookie"`
 	TTL        Duration `yaml:"ttl"`
 	RenewAfter Duration `yaml:"renew_after"`
+	MaxTTL     Duration `yaml:"max_ttl"`
 	Bind       []string `yaml:"bind"`
 	Subnet     Subnet   `yaml:"subnet"`
 }
@@ -384,6 +385,10 @@ func (s *Source) Validate() error {
 
 	if s.Session.RenewAfter != 0 && s.Session.RenewAfter >= s.Session.TTL {
 		return fmt.Errorf("session.renew_after must be shorter than session.ttl")
+	}
+
+	if s.Session.MaxTTL != 0 && s.Session.MaxTTL < s.Session.TTL {
+		return fmt.Errorf("session.max_ttl must not be shorter than session.ttl")
 	}
 
 	for _, b := range s.Session.Bind {

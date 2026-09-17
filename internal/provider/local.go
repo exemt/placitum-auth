@@ -7,6 +7,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/exemt/placitum-auth/internal/config"
+	"github.com/exemt/placitum-auth/internal/token"
 )
 
 const decoyHash = "$2a$12$C6UzMDM.H6dfI/f/IKcEe.7BQmv1oPUC4NUnfr5xNgUEy6Z1sKNIu"
@@ -45,6 +46,7 @@ func (l *Local) Verify(_ context.Context, c Credentials, id *Identity) (*Identit
 	}
 
 	id.Subject = user.Login
+	id.Cred = token.Credential(user.Password)
 	id.Groups = append(id.Groups, user.Groups...)
 
 	if user.Display != "" {

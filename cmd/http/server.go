@@ -34,6 +34,7 @@ type server struct {
 	list     *dataset.Publisher
 	sessions *livelist.Mirror
 	secrets  provider.Secrets
+	verify   chan struct{}
 }
 
 func (s *server) alive(src *config.Source, sess *token.Session) bool {
@@ -215,8 +216,21 @@ func (s *server) renew(w http.ResponseWriter, r *http.Request, src *config.Sourc
 		return
 	}
 
+	if why := s.spent(src, sess, now); why != "" {
+		s.forget(src, sess.SID, "AUTH_RENEW_REFUSED "+sess.Sub)
+		s.log.Info("renewal refused",
+			"source", src.Name, "sub", sess.Sub, "sid", sess.SID, "reason", why)
+		s.redirectToForm(w, r, src)
+
+		return
+	}
+
+	if sess.Born == 0 {
+		sess.Born = sess.Issued
+	}
+
 	sess.Issued = now.Unix()
-	sess.Expiry = now.Add(src.Session.TTL.D()).Unix()
+	sess.Expiry = expiryOf(now, src, sess.Born)
 	sess.Renew = renewAt(now, src)
 
 	if err := s.issue(w, r, src, sess); err != nil {
@@ -228,6 +242,50 @@ func (s *server) renew(w http.ResponseWriter, r *http.Request, src *config.Sourc
 	s.log.Info("session renewed", "source", src.Name, "sub", sess.Sub, "sid", sess.SID)
 
 	http.Redirect(w, r, s.backTo(r), http.StatusSeeOther)
+}
+
+// spent says why a session must not be renewed: it has lived its whole life, or the
+// local user behind it is gone, disabled or has a new password.
+func (s *server) spent(src *config.Source, sess *token.Session, now time.Time) string {
+	born := sess.Born
+	if born == 0 {
+		born = sess.Issued
+	}
+
+	if max := src.Session.MaxTTL.D(); max > 0 && now.Sub(time.Unix(born, 0)) >= max {
+		return "max_ttl"
+	}
+
+	if src.Provider != config.ProviderLocal {
+		return ""
+	}
+
+	user := src.Users[strings.ToLower(sess.Sub)]
+
+	switch {
+	case user == nil:
+		return "user removed"
+
+	case !user.Active():
+		return "user disabled"
+
+	case sess.Cred != "" && sess.Cred != token.Credential(user.Password):
+		return "password changed"
+	}
+
+	return ""
+}
+
+func expiryOf(now time.Time, src *config.Source, born int64) int64 {
+	expiry := now.Add(src.Session.TTL.D())
+
+	if max := src.Session.MaxTTL.D(); max > 0 {
+		if last := time.Unix(born, 0).Add(max); last.Before(expiry) {
+			expiry = last
+		}
+	}
+
+	return expiry.Unix()
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request, src *config.Source) {
@@ -461,6 +519,8 @@ func (s *server) render(w http.ResponseWriter, src *config.Source, v view, statu
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
 	w.WriteHeader(status)
 
 	page := s.pages.login

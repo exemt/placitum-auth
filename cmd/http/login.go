@@ -23,6 +23,8 @@ const (
 	msgFirstGate      = "Complete the first sign-in step first."
 
 	formLimit = 16 << 10
+
+	verifyWait = 5 * time.Second
 )
 
 func (s *server) submit(w http.ResponseWriter, r *http.Request, src *config.Source) {
@@ -97,15 +99,38 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request, src *config.Sour
 		return
 	}
 
+	// The attempt is counted before the check, not after it: parallel submits would
+	// otherwise all pass the lock test above and buy a guess each.
+	counts, over := s.reserve(r.Context(), src, scopes)
+	if over {
+		s.log.Warn("locked out",
+			"source", src.Name, "login", creds.Login, "client_ip", creds.ClientIP)
+		s.reform(w, r, src, fmt.Sprintf("Too many attempts. Try again in %s.",
+			humanLeft(src.Lockout.Lock.D())))
+
+		return
+	}
+
+	release, ok := s.verifySlot(r.Context())
+	if !ok {
+		s.log.Warn("verification queue is full", "source", src.Name, "client_ip", creds.ClientIP)
+		s.reform(w, r, src, msgUnavailable)
+
+		return
+	}
+
 	id, err := provider.Run(r.Context(), prov, creds, prior)
+
+	release()
+
 	if err != nil {
-		s.rejected(w, r, src, creds, scopes, err)
+		s.rejected(w, r, src, creds, scopes, counts, err)
 
 		return
 	}
 
 	if ok, why := s.burnCode(r.Context(), src, id, creds); !ok {
-		s.rejected(w, r, src, creds, scopes, why)
+		s.rejected(w, r, src, creds, scopes, counts, why)
 
 		return
 	}
@@ -123,8 +148,10 @@ func (s *server) accepted(w http.ResponseWriter, r *http.Request, src *config.So
 		SID:    token.NewID(),
 		Sub:    id.Subject,
 		Issued: now.Unix(),
-		Expiry: now.Add(src.Session.TTL.D()).Unix(),
+		Expiry: expiryOf(now, src, now.Unix()),
 		Renew:  renewAt(now, src),
+		Born:   now.Unix(),
+		Cred:   id.Cred,
 		Scope:  src.Session.Cookie,
 		Iss:    src.Name,
 		Net:    bind.Net,
@@ -162,7 +189,7 @@ func (s *server) accepted(w http.ResponseWriter, r *http.Request, src *config.So
 }
 
 func (s *server) rejected(w http.ResponseWriter, r *http.Request, src *config.Source,
-	creds provider.Credentials, scopes []string, cause error) {
+	creds provider.Credentials, scopes []string, counts []int, cause error) {
 
 	msg := msgBadCredentials
 
@@ -188,16 +215,22 @@ func (s *server) rejected(w http.ResponseWriter, r *http.Request, src *config.So
 		"reason", cause.Error(),
 	)
 
-	s.count(r.Context(), src, scopes)
+	s.lockSpent(r.Context(), src, scopes, counts)
 	s.reform(w, r, src, msg)
 }
 
-func (s *server) count(ctx context.Context, src *config.Source, scopes []string) {
+// reserve counts the attempt in every scope and says whether any of them is already
+// past the limit. A successful login clears the counters.
+func (s *server) reserve(ctx context.Context, src *config.Source, scopes []string) ([]int, bool) {
+	counts := make([]int, len(scopes))
+
 	if src.Lockout.Attempts <= 0 {
-		return
+		return counts, false
 	}
 
-	for _, scope := range scopes {
+	over := false
+
+	for i, scope := range scopes {
 		n, err := s.roster.Fail(ctx, scope, src.Lockout.Window.D())
 		if err != nil {
 			s.log.Warn("attempt counter failed", "scope", scope, "error", err.Error())
@@ -205,17 +238,67 @@ func (s *server) count(ctx context.Context, src *config.Source, scopes []string)
 			continue
 		}
 
-		if n < src.Lockout.Attempts {
+		counts[i] = n
+
+		if n > src.Lockout.Attempts {
+			over = true
+
+			s.lock(ctx, src, scope, n)
+
 			continue
 		}
 
-		if err := s.roster.Lock(ctx, scope, src.Lockout.Lock.D()); err != nil {
-			s.log.Warn("lock failed", "scope", scope, "error", err.Error())
-
-			continue
+		// Lock drops the counter it has just spent. The lock is read after the count, so a
+		// submit that starts that counter anew still meets the lock set beside it.
+		if left, err := s.roster.LockedFor(ctx, scope); err == nil && left > 0 {
+			over = true
 		}
+	}
 
-		s.log.Warn("locked", "scope", scope, "attempts", n, "for", src.Lockout.Lock.D().String())
+	return counts, over
+}
+
+func (s *server) lockSpent(ctx context.Context, src *config.Source, scopes []string, counts []int) {
+	if src.Lockout.Attempts <= 0 {
+		return
+	}
+
+	for i, scope := range scopes {
+		if i < len(counts) && counts[i] >= src.Lockout.Attempts {
+			s.lock(ctx, src, scope, counts[i])
+		}
+	}
+}
+
+func (s *server) lock(ctx context.Context, src *config.Source, scope string, n int) {
+	if err := s.roster.Lock(ctx, scope, src.Lockout.Lock.D()); err != nil {
+		s.log.Warn("lock failed", "scope", scope, "error", err.Error())
+
+		return
+	}
+
+	s.log.Warn("locked", "scope", scope, "attempts", n, "for", src.Lockout.Lock.D().String())
+}
+
+// verifySlot bounds password checks running at once: bcrypt is the expensive step an
+// anonymous client can trigger, and without a bound a flood of submits takes every core.
+func (s *server) verifySlot(ctx context.Context) (func(), bool) {
+	if s.verify == nil {
+		return func() {}, true
+	}
+
+	wait := time.NewTimer(verifyWait)
+	defer wait.Stop()
+
+	select {
+	case s.verify <- struct{}{}:
+		return func() { <-s.verify }, true
+
+	case <-wait.C:
+		return nil, false
+
+	case <-ctx.Done():
+		return nil, false
 	}
 }
 
@@ -290,7 +373,13 @@ func (s *server) priorIdentity(r *http.Request, src *config.Source) (*provider.I
 }
 
 func lockScopes(src *config.Source, c provider.Credentials) []string {
-	scopes := []string{src.Name + "/ip:" + c.ClientIP}
+	// An IPv6 client owns its whole /64: counting single addresses there limits nothing.
+	ip := c.ClientIP
+	if subnet := token.Subnet(ip, 32, 64); subnet != "" && strings.Contains(ip, ":") {
+		ip = subnet
+	}
+
+	scopes := []string{src.Name + "/ip:" + ip}
 
 	if login := strings.ToLower(strings.TrimSpace(c.Login)); login != "" {
 		scopes = append(scopes, src.Name+"/user:"+login)

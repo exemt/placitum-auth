@@ -133,6 +133,7 @@ func run() error {
 		list:     list,
 		sessions: sessions,
 		secrets:  keeper,
+		verify:   make(chan struct{}, cfg.VerifyLimit),
 	}
 
 	if nc != nil && cfg.DataDir != "" {

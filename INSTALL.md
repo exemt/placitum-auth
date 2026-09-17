@@ -41,6 +41,7 @@ number of sign-ins.
 | `WAF_AUTH_CONTOUR_KEY` | form | empty | private installation key that opens `store:` references |
 | `WAF_AUTH_COOKIE_SECURE` | form | `on` | cookies over TLS only; set `off` while the node serves plain HTTP |
 | `WAF_AUTH_REAL_IP_HEADER` | form | `X-Forwarded-For` | client address header; the last value is used, the one the node appended |
+| `WAF_AUTH_VERIFY_LIMIT` | form | CPU count, at least 2 | password checks running at once; a submit that waits longer than 5 s for its turn is refused |
 | `REDIS_URL` | inspector | `url` from `inspector.conf` | exchange: request headers with the session cookie |
 | `REDIS_INTERNAL_URL` | form | `internal` from `inspector.conf` | internal Redis for nonces, attempts and the session mirror; falls back to `REDIS_URL` with a warning |
 | `WAF_AUTH_GEO_ADDR` | inspector | empty | geo coder (`host:port`) for dataset writes with `write: net`, `net_all` or `asn`; empty makes them answer `AUTH_GEO_UNAVAILABLE` |

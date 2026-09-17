@@ -49,6 +49,7 @@ type Config struct {
 	Listen       string
 	CookieSecure bool
 	RealIPHeader string
+	VerifyLimit  int
 
 	ReloadEvery time.Duration
 
@@ -106,6 +107,10 @@ func Load(role string) (*Config, error) {
 	}
 
 	if c.Workers, err = envInt("WAF_AUTH_WORKERS", runtime.GOMAXPROCS(0)); err != nil {
+		return nil, err
+	}
+
+	if c.VerifyLimit, err = envInt("WAF_AUTH_VERIFY_LIMIT", max(2, runtime.GOMAXPROCS(0))); err != nil {
 		return nil, err
 	}
 
@@ -253,6 +258,10 @@ func (c *Config) validateInspector() error {
 func (c *Config) validateHTTP() error {
 	if c.Listen == "" {
 		return fmt.Errorf("WAF_AUTH_LISTEN is empty")
+	}
+
+	if c.VerifyLimit < 1 {
+		return fmt.Errorf("WAF_AUTH_VERIFY_LIMIT must be positive, got %d", c.VerifyLimit)
 	}
 
 	abs, err := filepath.Abs(c.WebDir)

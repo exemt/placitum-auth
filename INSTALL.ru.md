@@ -39,6 +39,7 @@ docker build -f deploy/Dockerfile -t placitum/auth .
 | `WAF_AUTH_CONTOUR_KEY` | форма | пусто | приватный ключ установки: им открываются ссылки `store:` |
 | `WAF_AUTH_COOKIE_SECURE` | форма | `on` | куки только по TLS; пока узел отвечает по HTTP, ставьте `off` |
 | `WAF_AUTH_REAL_IP_HEADER` | форма | `X-Forwarded-For` | заголовок с адресом клиента; берётся последнее значение — его дописал узел |
+| `WAF_AUTH_VERIFY_LIMIT` | форма | число ядер, не меньше 2 | одновременных проверок пароля; отправка, которая ждёт очереди дольше 5 с, получает отказ |
 | `REDIS_URL` | инспектор | `url` из `inspector.conf` | обменник: заголовки запроса с кукой сессии |
 | `REDIS_INTERNAL_URL` | форма | `internal` из `inspector.conf` | внутренний Redis под nonce, попытки и зеркало сессий; без него — `REDIS_URL` с предупреждением |
 | `WAF_AUTH_GEO_ADDR` | инспектор | пусто | кодер гео (`host:port`) для записей в наборы с `write: net` / `net_all` / `asn`; пусто — такие записи отвечают `AUTH_GEO_UNAVAILABLE` |

@@ -39,6 +39,8 @@ type Session struct {
 	Issued int64    `json:"iat"`
 	Expiry int64    `json:"exp"`
 	Renew  int64    `json:"rnw,omitempty"`
+	Born   int64    `json:"brn,omitempty"`
+	Cred   string   `json:"crd,omitempty"`
 	Scope  string   `json:"scp"`
 	Iss    string   `json:"iss"`
 	Net    string   `json:"net,omitempty"`
@@ -253,12 +255,28 @@ func Subnet(ip string, v4bits, v6bits int) string {
 	return prefix.String()
 }
 
+// NoUA stands for a request without User-Agent: a session bound to a browser
+// must not open for a client that sends no header at all.
+const NoUA = "none"
+
 func Fingerprint(ua string) string {
 	if ua == "" {
-		return ""
+		return NoUA
 	}
 
 	sum := sha256.Sum256([]byte(ua))
 
 	return hex.EncodeToString(sum[:4])
+}
+
+// Credential is a short fingerprint of a stored password hash: a renewed session
+// carries it, so a changed password ends the session at the next renewal.
+func Credential(hash string) string {
+	if hash == "" {
+		return ""
+	}
+
+	sum := sha256.Sum256([]byte(hash))
+
+	return hex.EncodeToString(sum[:6])
 }

@@ -32,6 +32,8 @@ type Identity struct {
 	Display string
 	Groups  []string
 	AMR     []string
+	// Cred is token.Credential of the password hash the login was checked against.
+	Cred string
 }
 
 func (id *Identity) with(amr string) {

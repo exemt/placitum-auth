@@ -82,11 +82,15 @@ users.
 
 **Renewal.** The module sets no cookie on `allow`, so there is no sliding expiry. After
 `renew_after` the inspector redirects a navigation to `<login>/renew`, and the form reissues the
-token without asking for the password; `renew_after: 0` turns this off.
+token without asking for the password; `renew_after: 0` turns this off. Renewal is not endless:
+`session.max_ttl` is the longest a session lives from sign-in, renewals included (`0` — no limit),
+and the form refuses to renew a `local` user who was removed, disabled or given a new password.
 
 **Attempts.** The login ticket is single-use, and failures are counted in Redis both by address and
-by login; too many in the window lock sign-in for a while. The address lock is shared by every
-profile of the process.
+by login; too many in the window lock sign-in for a while. The attempt is counted before the
+password is checked, so parallel submits get no extra guesses; IPv6 addresses are counted by /64.
+The address lock is shared by every profile of the process. Password checks running at once are
+bounded by `WAF_AUTH_VERIFY_LIMIT`.
 
 ## Headers for the application
 
