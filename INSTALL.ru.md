@@ -42,8 +42,8 @@ docker build -f deploy/Dockerfile -t placitum/auth .
 | `WAF_AUTH_VERIFY_LIMIT` | форма | число ядер, не меньше 2 | одновременных проверок пароля; отправка, которая ждёт очереди дольше 5 с, отклоняется |
 | `REDIS_URL` | инспектор | `url` из `inspector.conf` | буфер: заголовки запроса с кукой сессии |
 | `REDIS_INTERNAL_URL` | форма | `internal` из `inspector.conf` | внутренний Redis под nonce, попытки и зеркало сессий; без него — `REDIS_URL` с предупреждением |
-| `WAF_AUTH_GEO_ADDR` | инспектор | пусто | кодер гео (`host:port`) для записей в наборы с `write: net` / `net_all` / `asn`; пусто — такие записи отвечают `AUTH_GEO_UNAVAILABLE` |
-| `WAF_AUTH_GEO_TIMEOUT`, `WAF_AUTH_GEO_NEG_MAX` | инспектор | `500ms`, `0` | ожидание кодера на промахе и потолок отрицательного кэша |
+| `WAF_AUTH_GEO_ADDR` | инспектор | пусто | справочник сетей (`host:port`) для записей в наборы с `write: net` / `net_all` / `asn`; пусто — такие записи отвечают `AUTH_GEO_UNAVAILABLE` |
+| `WAF_AUTH_GEO_TIMEOUT`, `WAF_AUTH_GEO_NEG_MAX` | инспектор | `500ms`, `0` | ожидание справочника сетей на промахе и предел отрицательного кэша |
 | `WAF_AUTH_STORE_TIMEOUT` | инспектор | `150ms` | таймаут чтения из буфера |
 | `WAF_AUTH_WORKERS`, `WAF_AUTH_QUEUE_DEPTH`, `WAF_AUTH_QUEUE_FULL`, `WAF_AUTH_QUEUE_EXPAND` | инспектор | число ядер, `inspector.conf` | воркеры и очередь |
 | `WAF_AUTH_VERSIONS` | инспектор | `2` | принимаемые версии схемы сообщения |
