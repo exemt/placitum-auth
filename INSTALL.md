@@ -42,11 +42,11 @@ number of sign-ins.
 | `WAF_AUTH_COOKIE_SECURE` | form | `on` | cookies over TLS only; set `off` while the node serves plain HTTP |
 | `WAF_AUTH_REAL_IP_HEADER` | form | `X-Forwarded-For` | client address header; the last value is used, the one the node appended |
 | `WAF_AUTH_VERIFY_LIMIT` | form | CPU count, at least 2 | password checks running at once; a submit that waits longer than 5 s for its turn is refused |
-| `REDIS_URL` | inspector | `url` from `inspector.conf` | exchange: request headers with the session cookie |
+| `REDIS_URL` | inspector | `url` from `inspector.conf` | buffer: request headers with the session cookie |
 | `REDIS_INTERNAL_URL` | form | `internal` from `inspector.conf` | internal Redis for nonces, attempts and the session mirror; falls back to `REDIS_URL` with a warning |
 | `WAF_AUTH_GEO_ADDR` | inspector | empty | geo coder (`host:port`) for dataset writes with `write: net`, `net_all` or `asn`; empty makes them answer `AUTH_GEO_UNAVAILABLE` |
 | `WAF_AUTH_GEO_TIMEOUT`, `WAF_AUTH_GEO_NEG_MAX` | inspector | `500ms`, `0` | coder wait on a miss and negative cache limit |
-| `WAF_AUTH_STORE_TIMEOUT` | inspector | `150ms` | exchange read timeout |
+| `WAF_AUTH_STORE_TIMEOUT` | inspector | `150ms` | buffer read timeout |
 | `WAF_AUTH_WORKERS`, `WAF_AUTH_QUEUE_DEPTH`, `WAF_AUTH_QUEUE_FULL`, `WAF_AUTH_QUEUE_EXPAND` | inspector | CPUs, `inspector.conf` | workers and queue |
 | `WAF_AUTH_VERSIONS` | inspector | `2` | accepted message schema versions |
 | `WAF_AUTH_LOG` | both | `info` | log level |
