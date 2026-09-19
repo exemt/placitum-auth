@@ -54,6 +54,9 @@ TOTP gate takes the identity from the session of the first one (`identity.from`)
 | `jwt` | a token issued by someone else, in a cookie or a header | signature and claims, no form |
 | `app` | the application's own login | the gate watches the application accept a login and trusts its cookie |
 
+`ldap` and `ntlm` are Paid Features under the [license](LICENSE.md): they need a Commercial License.
+There are 30 days to evaluate them, and educational organizations use them free of charge.
+
 Users of `local` are an ordinary dataset of `login:bcrypt[:groups[:TOTP secret reference]]` lines,
 edited like any other dataset, including an expiry per record. Service passwords and TOTP secrets
 are references to stored objects (`password_store`) that the form process opens with the
