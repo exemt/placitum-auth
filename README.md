@@ -8,8 +8,7 @@ logins and passwords, LDAP, NTLM, a token from another issuer, or the applicatio
 users it is a second factor, for the application a plain header with the name of the signed-in
 user.
 
-The nginx module knows nothing about the second factor: to it this is an ordinary inspector that
-answers `allow`, `redirect` or `deny`.
+To the nginx module this is an ordinary inspector that answers `allow`, `redirect` or `deny`.
 
 ## Two processes, one image
 
@@ -74,7 +73,9 @@ The payload carries the session id, subject, issue time, expiry, renewal point, 
 binding to the client subnet (`/24` for IPv4, `/64` for IPv6) and the User-Agent fingerprint, the
 passed factors and the groups. A profile accepts tokens only from its own source.
 
-**Cookie and list.** The cookie proves that the session was issued here; a record in an active
+### Cookie and list
+
+The cookie proves that the session was issued here; a record in an active
 dataset proves that it has not been ended. On every request older than the grace window the
 inspector checks the session id against its mirror of the dataset: a record means `allow`, no record
 means `deny` with `AUTH_SESSION_REVOKED` (the form for navigations), an unavailable list means
@@ -83,13 +84,17 @@ outside: sign-out on the form, the panel and an incident script all do the same 
 carries the login in its reason (`AUTH_LOGIN operator`), so the dataset reads as a list of signed-in
 users.
 
-**Renewal.** The module sets no cookie on `allow`, so there is no sliding expiry. After
+### Renewal
+
+The module sets no cookie on `allow`, so there is no sliding expiry. After
 `renew_after` the inspector redirects a navigation to `<login>/renew`, and the form reissues the
 token without asking for the password; `renew_after: 0` turns this off. Renewal is not endless:
 `session.max_ttl` is the longest a session lives from sign-in, renewals included (`0` — no limit),
 and the form refuses to renew a `local` user who was removed, disabled or given a new password.
 
-**Attempts.** The login ticket is single-use, and failures are counted in Redis both by address and
+### Attempts
+
+The login ticket is single-use, and failures are counted in Redis both by address and
 by login; too many in the window lock sign-in for a while. The attempt is counted before the
 password is checked, so parallel submits get no extra guesses; IPv6 addresses are counted by /64.
 The address lock is shared by every profile of the process. Password checks running at once are
@@ -114,13 +119,12 @@ with it the application could issue itself a session past the second factor. Nei
 inspectors receive the identity through the `sessions` section of later messages, not through
 headers.
 
-## Good to know
+## On the route
 
-- **The route must capture headers without masking `cookie`**, otherwise the inspector sees a sha256
-  instead of the token and sends signed-in users back to the form.
-- **Put gates on separate waves**, in the order `challenge` → `captcha` → `auth`: two redirects on
-  one wave race each other.
-- **`auth` gives no score.** It decides, it does not evaluate.
+The route must capture headers without masking `cookie`; otherwise the inspector sees a sha256
+instead of the token and sends signed-in users back to the form. Put gates on separate waves, in the
+order `challenge`, `captcha`, `auth`, because two redirects on one wave race each other. `auth` gives
+no score: its answers are `allow`, `redirect` and `deny`.
 
 Installation, keys and nginx routes are in [INSTALL.md](INSTALL.md).
 
